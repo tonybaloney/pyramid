@@ -22,6 +22,15 @@ prints a terminal summary at one of three verbosity levels.
 
 ## Step 1 — Always: write the per-run report file
 
+**Pre-condition (B2 fix, v0.2.1):** the JSON trace was written by
+`pyramid-orchestrate` *before* this skill was invoked. Verify that
+`<session_dir>/files/pyramid-runs/<task-slug>-<YYYYMMDD-HHMMSS>.json`
+exists. If it does not, write it now from `trace` before doing anything
+else, and append a `⚠ JSON trace was written late by pyramid-aggregate`
+warning to the always-on warnings list. Do not proceed past this step
+until both the JSON trace and (later in this step) the Markdown report
+are on disk.
+
 Render the full report as Markdown to:
 
 ```
@@ -86,9 +95,22 @@ Note any subtasks that hit `max_tier` without `accept`, prefixed with `⚠`.
 
 | `output_level` | Terminal output                                                                |
 |----------------|--------------------------------------------------------------------------------|
-| `quiet` (default) | Two lines: a tick + cost summary, plus a `Full report:` path.               |
+| `quiet` (default) | Two lines: a tick + cost summary, plus a `Full report:` path. **No answer body, no DAG, no tables.** (C3 fix, v0.2.1.) |
 | `normal`       | Quiet output **plus** the synthesized final answer **plus** the cost-ledger table. |
 | `debug`        | Normal output **plus** the rendered DAG tree **plus** every raw `pyramid-*` block (today's behavior). |
+
+### Hard contract — quiet means quiet (added in v0.2.1, fixes C3)
+
+When `output_level == "quiet"`, the terminal output **must** be exactly:
+
+1. Zero or more `⚠` warning lines (one per warning).
+2. The two-line `quiet` template below.
+
+The host agent must NOT also append the synthesized answer body,
+markdown headers, bullet lists, tables, or any other commentary at
+quiet level. The full answer is in the report file written in Step 1
+— that is the user's escape hatch. If the user wants the answer inline,
+they pass `--output=normal`.
 
 ### `quiet` output template
 

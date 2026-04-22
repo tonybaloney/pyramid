@@ -2,6 +2,42 @@
 
 All notable changes to this plugin are documented here.
 
+## 0.2.1 — smoke-benchmark fixes (B1–B4, C3)
+
+### Fixed
+
+- **B1 — Cost arithmetic.** `pyramid-orchestrate` now pins
+  `compute_totals` as the single source of truth for cost numbers, with
+  an explicit Python-style formula and a sanity assertion that
+  `totals.cost_tw_units` matches the per-call recomputation. Per-verdict
+  `estimated_cost_used` scalars are documented as informational only —
+  never substituted into totals. Smoke run had reported
+  `cost_tw_units = 0.5` for a task whose true value was ≈ 478.5.
+- **B2 — JSON trace must be written.** `pyramid-aggregate` now verifies
+  the JSON trace exists as Step 1 (pre-condition) and writes it itself
+  with a `⚠` warning if `pyramid-orchestrate` failed to. The orchestrate
+  skill now also explicitly contracts that `write_trace` runs before
+  invoking aggregate.
+- **B3 — Verifier short-circuit.** `pyramid-orchestrate` now contracts
+  that every dispatched answer must go through `pyramid-verify`. No
+  "verifier round-trip would cost more than the work" shortcut. Any
+  fast-path must live inside `pyramid-verify` itself with a named
+  heuristic and a `verifier_skipped: true` trace flag.
+- **B4 — Inline-resolved subtasks.** `pyramid-orchestrate` now contracts
+  that every DAG node must be dispatched. No "resolve inline" shortcut.
+- **C3 — Quiet is now actually quiet.** `pyramid-aggregate` Step 4 adds
+  a hard contract: at `output_level=quiet`, the terminal output is
+  exactly `⚠` warning lines plus the two-line summary. The host agent
+  must NOT append the synthesized answer body, headers, or tables.
+
+### Notes
+
+- No behavior changes for `--output=normal` or `--output=debug`.
+- No trace-shape changes; this release is backward-compatible with
+  v0.2.0 trace consumers.
+- Discovered via the v0.2.0 smoke benchmark (3 tasks). See
+  `docs/benchmarks/baseline-metrics.md` § Baseline #1 for raw evidence.
+
 ## 0.2.0 — token-weighted costs and quiet UX
 
 ### Breaking
