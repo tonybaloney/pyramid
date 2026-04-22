@@ -9,3 +9,6 @@ Thumbs.db
 __pycache__/
 *.pyc
 .venv/
+
+bench-task*.log
+.pyramid-runs/
