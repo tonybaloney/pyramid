@@ -33,15 +33,36 @@ Parse the returned `pyramid-verdict` JSON. Fields: `confidence`, `issues`,
 
 ## Step 2 — Apply the escalation rule (Hansen-Zilberstein VoC)
 
-Per-model **cost table** (relative units, scaled per 1k tokens; treat as
-ordinal — only ratios matter):
+### Token-weighted cost model (v0.2.0)
 
-| Tier | Claude track       | Cost | GPT track       | Cost |
-|------|--------------------|------|------------------|------|
-| 1    | claude-haiku-4.5   | 1    | gpt-5-mini       | 1    |
-| 2    | claude-sonnet-4.6  | 5    | gpt-5.4          | 4    |
-| 3    | claude-opus-4.7    | 25   | gpt-5.3-codex    | 20   |
-| V    | claude-haiku-4.5   | 1    | gpt-5-mini       | 1    |
+Pyramid MoA accounts cost in **token-weighted units** (`tw-units`),
+not flat ordinals. For any model call:
+
+```
+cost(call) = (input_tokens + output_tokens) * multiplier(model)
+```
+
+Per-model multipliers (per token, normalized so `claude-sonnet-4.6 = 1.0`):
+
+| Tier | Claude track          | Multiplier | GPT track          | Multiplier  |
+|------|-----------------------|------------|--------------------|-------------|
+| 1    | `claude-haiku-4.5`    | 0.33       | `gpt-5-mini`       | 0.10 (TBD)  |
+| 2    | `claude-sonnet-4.6`   | 1.00       | `gpt-5.4`          | 1.00 (TBD)  |
+| 3    | `claude-opus-4.7`     | 7.00       | `gpt-5.3-codex`    | 5.00 (TBD)  |
+| V    | `claude-haiku-4.5`    | 0.33       | `gpt-5-mini`       | 0.10 (TBD)  |
+
+GPT-track multipliers are placeholders pending confirmation.
+
+When the underlying `task` tool surfaces actual token counts, use them.
+Otherwise fall back to a tokenizer estimate (`len(prompt + answer) / 4`)
+and mark `cost_estimated: true` in the trace.
+
+For the VoC pre-escalation comparison (where the next tier's call has
+**not happened yet**), use a synthetic prior of **1500 input + 800 output
+tokens** for the planned next-tier call, multiplied by that tier's
+multiplier.
+
+### VoC escalation rule
 
 **Expected accuracy gain** from escalating tier N → N+1, given current
 verifier confidence `c`:
@@ -58,10 +79,15 @@ Use these calibrated `P_correct(N+1 | N wrong)` priors from the paper
 1. `confidence < theta[N]` (theta defaults: θ₁=0.75, θ₂=0.85), **OR**
    `would_benefit_from_escalation == true` AND `confidence < theta[N] + 0.05`.
 2. `tier < max_tier`.
-3. `expected_gain(N→N+1, confidence) * value_of_correctness >= cost(N+1) / cost(N)`.
-   Use `value_of_correctness = 10` as the default (correctness is ~10× more
-   valuable than the relative compute cost of tier-1).
-4. `spent_so_far + estimated_cost(N+1) <= budget` (skip if no budget set).
+3. `expected_gain(N→N+1, confidence) * value_of_correctness >= cost_ratio(N+1, N)`,
+   where `cost_ratio(N+1, N) = projected_cost(N+1) / observed_cost(N)`
+   using token-weighted costs from above. Default `value_of_correctness = 8`
+   (re-tuned from `10` for the new 1:3:21 cost ratio; see
+   `docs/benchmarks/baseline-metrics.md`).
+4. `spent_so_far + projected_cost(N+1) <= budget` in tw-units (skip if no
+   budget set). Note: `--budget` values are now interpreted as tw-units, not
+   USD — the flag was previously documented as USD but always operated on
+   ordinal units; this clarifies it.
 
 Otherwise **accept** the current answer as best-so-far.
 
@@ -78,10 +104,24 @@ Return exactly this fenced block to the orchestrator:
   "decision": "accept" | "escalate",
   "next_tier": null | 2 | 3,
   "reason": "<one sentence: why this decision per VoC>",
-  "estimated_cost_used": <number>
+  "estimated_cost_used": <number>,
+  "cost_breakdown": {
+    "solver_input_tokens": <int>,
+    "solver_output_tokens": <int>,
+    "solver_multiplier": <float>,
+    "verifier_input_tokens": <int>,
+    "verifier_output_tokens": <int>,
+    "verifier_multiplier": <float>,
+    "cost_estimated": <bool>
+  }
 }
 ```
 ````
+
+`estimated_cost_used` is in **token-weighted units** (tw-units) and equals
+`solver_call_cost + verifier_call_cost` for this verification step.
+`cost_breakdown` lets the orchestrator and `pyramid-aggregate` reconstruct
+totals and compute the always-tier-3 baseline by re-weighting tokens.
 
 The orchestrator uses `decision` to either move on to the next DAG node
 (accept) or re-dispatch the same subtask to `next_tier` (escalate).

@@ -1,76 +1,123 @@
 ---
 name: pyramid-aggregate
-description: Merge Pyramid MoA subtask results into a single user-facing response with a cost ledger showing tier escalations and estimated savings.
+description: Merge Pyramid MoA subtask results into a single user-facing response, write a per-run report file, and print a summary at the configured verbosity.
 ---
 
 # pyramid-aggregate
 
 Final step of the Pyramid MoA pipeline. Combines per-subtask results into a
-single coherent answer and prints the cost ledger so the user can see what
-the router did and what it saved.
+single coherent answer, **writes a Markdown per-run report** to disk, and
+prints a terminal summary at one of three verbosity levels.
 
 ## Inputs
 
 - `results`: map of subtask id → `pyramid-result` block
-- `ledger`: list of `{subtask_id, tier, verifier_confidence, decision, reason, estimated_cost_used}`
+- `ledger`: list of `{subtask_id, tier, verifier_confidence, decision, reason, cost_used}`
 - `dag`: original `pyramid-dag` block
 - `task`: original user task description
-- `spent_so_far`: total estimated cost (relative units)
+- `trace`: structured trace dict from `pyramid-orchestrate` (with `subtasks`,
+  `totals`, `config`, etc.)
+- `pyramid_config`: includes `output_level` (`quiet | normal | debug`,
+  default `quiet`) and `session_dir`
 
-## Step 1 — Compose the final answer
+## Step 1 — Always: write the per-run report file
 
-Walk `dag.nodes` in topological order. For each node, take the corresponding
-entry from `results` and:
+Render the full report as Markdown to:
 
-- **`read` / `verify`**: include the answer text as a brief bullet.
-- **`transform` / `write` / `synthesize`**: if the answer describes file edits
-  (paths + diffs), summarize them as a "Files changed" block. If it includes
-  free-text reasoning, condense to 1–3 sentences.
+```
+<session_dir>/files/pyramid-runs/<task-slug>-<YYYYMMDD-HHMMSS>.md
+```
 
-Produce a single final response with three sections:
+Using the same `task-slug-timestamp` stem as the JSON trace from
+`pyramid-orchestrate` so the two files pair up.
 
-1. **Result** — the synthesized answer to the user's original task.
-2. **Files changed** — bulleted list of files written/edited across all subtasks
-   (deduplicated). Skip if none.
-3. **Pyramid MoA ledger** — formatted as below.
+Report contents (in order):
 
-## Step 2 — Format the ledger
+1. **H1**: the original task.
+2. **Config**: track, theta, max_tier, anchor, budget, output_level,
+   value_of_correctness — as a fenced code block.
+3. **DAG**: render `dag.nodes` as an indented tree (parent → children),
+   not raw JSON. Show `id (kind, prior=X.XX)`.
+4. **Per-subtask sections**: for each node in topological order:
+   - Tier path (e.g., `T1 → T2 → accept`).
+   - Final verifier confidence and any `issues` from the last verdict.
+   - The full `answer` text (or a `…[truncated at 32 KB]` marker if larger).
+5. **Cost ledger** (the table from Step 2 below).
+6. **Savings summary** (from Step 3 below).
+7. **Appendix — raw blocks**: for debugging, dump each subtask's raw
+   `pyramid-result`, `pyramid-verdict`, and `pyramid-decision` blocks.
+
+The full report file is written **regardless of `output_level`** — it is
+the durable artifact users can open after the fact.
+
+## Step 2 — Format the cost ledger
 
 Render as a markdown table:
 
 ```
-| Subtask           | Final tier | Confidence | Decision path                  | Cost |
-|-------------------|------------|------------|--------------------------------|------|
-| <id (kind)>       | T1/T2/T3   | 0.XX       | T1→accept  /  T1→T2→accept     | X.X  |
-| ...               | ...        | ...        | ...                            | ...  |
-| **Total**         |            |            |                                | X.X  |
+| Subtask           | Final tier | Confidence | Decision path        | Tokens (in/out) | Cost (tw) |
+|-------------------|------------|------------|----------------------|-----------------|-----------|
+| <id (kind)>       | T1/T2/T3   | 0.XX       | T1→accept            | 1234 / 567      | 612.3     |
+| ...               | ...        | ...        | ...                  | ...             | ...       |
+| **Total**         |            |            |                      | I / O           | X.X       |
 ```
 
-The `Decision path` column reconstructs the escalation chain by walking the
-ledger entries for that subtask in order.
+`Cost (tw)` is in token-weighted units per `pyramid-verify`'s model.
+`Decision path` is reconstructed from `subtask.tier_path` plus the final
+accept/max-tier outcome.
 
-Below the table, print a one-line **savings summary**:
+## Step 3 — Compute the savings summary
 
 ```
-Pyramid MoA: total cost = X.X units; always-tier-3 cost would have been Y.Y units → saved (Y.Y − X.X) / Y.Y * 100 = Z%.
+always_tier3_cost = (totals.tokens_in_total + totals.tokens_out_total)
+                    * multiplier(track_models[3])
+savings_pct       = (always_tier3_cost - totals.cost_tw_units) / always_tier3_cost * 100
 ```
 
-Where `always-tier-3 cost = sum(cost_of_tier3_for_track) for each subtask`.
-Also note any subtasks that hit `max_tier` without reaching the threshold,
-prefixed with `⚠`.
+One-liner:
 
-## Step 3 — Sanity checks
+```
+Pyramid MoA: cost = X.X tw-units; always-tier-3 baseline = Y.Y → saved Z%.
+```
+
+Note any subtasks that hit `max_tier` without `accept`, prefixed with `⚠`.
+
+## Step 4 — Print the terminal summary at the right verbosity
+
+| `output_level` | Terminal output                                                                |
+|----------------|--------------------------------------------------------------------------------|
+| `quiet` (default) | Two lines: a tick + cost summary, plus a `Full report:` path.               |
+| `normal`       | Quiet output **plus** the synthesized final answer **plus** the cost-ledger table. |
+| `debug`        | Normal output **plus** the rendered DAG tree **plus** every raw `pyramid-*` block (today's behavior). |
+
+### `quiet` output template
+
+```
+✓ Pyramid MoA done — <N> subtasks, cost <X> tw-units (vs <Y> always-T3 → <Z>% saved).
+  Full report: <absolute path to .md report>
+```
+
+### Always-on warnings (any verbosity)
+
+Even at `quiet`, surface a one-line `⚠` warning above the summary for:
+
+- Any subtask that hit `max_tier` without `decision == "accept"`.
+- Any malformed solver output (handled per `pyramid-orchestrate` failure rules).
+- Any `cost_estimated: true` calls (so the user knows token counts were
+  approximated, not measured).
+
+## Step 5 — Sanity checks
 
 Before returning:
 
 - Every subtask in `dag.nodes` must appear in both `results` and the ledger.
-  If any are missing, add a `⚠ Subtask <id> did not complete` line to the
-  ledger and surface this prominently above the result.
-- If the response mentions file paths, verify each exists (`view` or `glob`)
-  and warn in the ledger if any do not.
+  Missing → `⚠ Subtask <id> did not complete` line above the summary.
+- If the response mentions file paths, `glob` them and warn in the report
+  file (and as a `⚠` line at quiet level) if any do not exist.
+- Cap the report file at 1 MB; truncate any individual `answer` field
+  beyond 32 KB with `…[truncated]`.
 
 ## Output
 
-Print the final response (Result + Files changed + Ledger) directly. Do not
-return a fenced block — this is the user-facing output, not data for another
-skill.
+Print only the summary appropriate to `output_level`. The full detail
+lives in the report file written in Step 1; users open it on demand.
