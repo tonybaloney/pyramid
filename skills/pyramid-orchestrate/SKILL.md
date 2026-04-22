@@ -85,9 +85,36 @@ for node in order:
     trace["subtasks"].append(subtask_trace)
 
 trace["totals"] = compute_totals(trace, dag)            # see "Totals" below
-write_trace(trace, pyramid_config.session_dir)
-invoke pyramid-aggregate with (results, ledger, dag, task, trace, pyramid_config)
+trace_path = write_trace(trace, pyramid_config.session_dir)   # MUST succeed
+invoke pyramid-aggregate with (results, ledger, dag, task, trace, trace_path, pyramid_config)
 ```
+
+### Hard contract — no shortcuts (added in v0.2.1, fixes B1–B4)
+
+These rules are non-negotiable. The host agent may NOT optimize them away
+even on tasks it judges "trivial". Smoke benchmark of v0.2.0 found every
+one of these contracts broken at least once.
+
+1. **Every DAG node must be dispatched** to `dispatch(tier, node, ctx)`.
+   No "resolve inline" shortcut. If a node looks trivial, dispatch it to
+   tier 1 anyway — the cost is bounded and the verifier needs a real
+   answer to grade. (Defect B4.)
+2. **Every dispatched answer must go through `pyramid-verify`.** No
+   "verifier round-trip would cost more than the work" shortcut. The
+   verifier *is* the safety net; skipping it converts a router into a
+   single-tier wrapper. (Defect B3.) If a fast-path is ever justified
+   it must be added to `pyramid-verify` itself with a named heuristic
+   and a `verifier_skipped: true` trace flag — never decided by the
+   orchestrator.
+3. **`totals.cost_tw_units` is computed from `subtasks[*].calls[*]`,
+   never copied from a per-verdict scalar.** The exact formula is
+   pinned in "Totals" below. `verdict.estimated_cost_used` is
+   informational only — useful in the per-verdict ledger row, but
+   *never* substituted into the totals. (Defect B1.)
+4. **`write_trace` runs before `pyramid-aggregate`.** If the JSON write
+   fails, raise; do not invoke aggregate. The aggregate skill itself
+   re-checks that the JSON file exists before printing the quiet
+   summary. (Defect B2.)
 
 ### Capturing call metadata (`call_meta`)
 
@@ -102,21 +129,38 @@ After each `task`-tool dispatch, capture:
 
 ### Totals computed at the end
 
+`compute_totals(trace, dag)` is the **single source of truth** for cost
+numbers. It must always recompute from `subtasks[*].calls[*]`; never
+read or sum any per-verdict `estimated_cost_used` field.
+
+```python
+def compute_totals(trace, dag, multiplier):
+    calls = [c for st in trace["subtasks"] for c in st["calls"]]
+    tokens_in  = sum(c["input_tokens"]  for c in calls)
+    tokens_out = sum(c["output_tokens"] for c in calls)
+    cost_tw    = sum((c["input_tokens"] + c["output_tokens"])
+                     * multiplier(c["model"]) for c in calls)
+    cost_t3    = (tokens_in + tokens_out) * multiplier(track_models[3])
+    return {
+      "subtasks_total":             len(trace["subtasks"]),
+      "subtasks_accepted":          sum(1 for st in trace["subtasks"] if st["accepted"]),
+      "subtasks_max_tier_reached":  sum(1 for st in trace["subtasks"]
+                                        if st["final_tier"] == max_tier and not st["accepted"]),
+      "tier_dispatches":            {t: sum(1 for c in calls if c["tier"] == t) for t in (1,2,3)},
+      "verifier_calls":             sum(len(st["verdicts"]) for st in trace["subtasks"]),
+      "tokens_in_total":            tokens_in,
+      "tokens_out_total":           tokens_out,
+      "cost_tw_units":              round(cost_tw, 2),
+      "cost_tw_units_always_tier3": round(cost_t3, 2),
+      "savings_pct":                round(100 * (1 - cost_tw / cost_t3), 2) if cost_t3 else 0,
+      "wall_clock_ms":              sum(c.get("latency_ms") or 0 for c in calls),
+      "cost_estimated":             any(c.get("cost_estimated") for c in calls),
+    }
 ```
-totals = {
-  "subtasks_total": <int>,
-  "subtasks_accepted": <int>,
-  "subtasks_max_tier_reached": <int>,
-  "tier_dispatches": {1: <int>, 2: <int>, 3: <int>},
-  "verifier_calls": <int>,
-  "tokens_in_total": <int>,
-  "tokens_out_total": <int>,
-  "cost_tw_units": <float>,
-  "cost_tw_units_always_tier3": <float>,   # sum(tokens) * multiplier(tier3 model)
-  "savings_pct": <float>,                   # 1 - cost / cost_always_tier3
-  "wall_clock_ms": <int>
-}
-```
+
+**Sanity assertion before writing the trace:**
+`abs(totals.cost_tw_units - sum((c.in+c.out)*mult(c.model) for c in all_calls)) < 0.01`.
+If this fails, the totals are wrong — fix the formula, do not paper over.
 
 ### Trace file location
 
