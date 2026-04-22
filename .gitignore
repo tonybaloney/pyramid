@@ -1,0 +1,11 @@
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# Python (in case eval scripts get added later)
+__pycache__/
+*.pyc
+.venv/
