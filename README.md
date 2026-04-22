@@ -102,23 +102,76 @@ proportional to actual model spend, so the ratio Haiku:Sonnet:Opus is now
 | 3    | `claude-opus-4.7`    | `gpt-5.3-codex`  | `claude-opus-4.7`    |
 | V    | `claude-haiku-4.5`   | `gpt-5-mini`     | `claude-haiku-4.5`   |
 
-### Example
+### Examples
+
+The examples below are real outputs captured from the v0.2.0 smoke run on
+this repository. See [`docs/benchmarks/baseline-metrics.md`](docs/benchmarks/baseline-metrics.md)
+for the full results, including discovered defects.
+
+#### 1. Read task (low difficulty, single-shot)
 
 ```
-/pyramid:pyramid Find the function that handles password reset and add rate limiting (max 5/hour per user)
+$ copilot -p "/pyramid:pyramid List all Markdown files modified in the last 7 days in this repository. Read-only task." --autopilot
+
+✓ Pyramid MoA done — 1 subtask, cost 297.0 tw-units (vs 6300.0 always-T3 → 95.3% saved).
+  Full report: ~/.copilot/session-state/<id>/files/pyramid-runs/list-all-markdown-…json
+
+⚠ Token counts estimated (`cost_estimated: true`).
 ```
 
-The router will typically:
+DAG: 1 read node, prior 0.10. Routed to tier-1 (Haiku-4.5). Verifier
+confidence 0.92 → accept. Wall-clock ~134 s.
 
-1. Decompose into ~3 subtasks: *find function* (read, prior 0.10), *design
-   rate-limit approach* (synthesize, prior 0.55), *implement + test*
-   (transform+verify, prior 0.40).
-2. Run the *find* subtask at tier-1 → verifier confidence ≈ 0.95 → accept.
-3. Run *design* at tier-1 → verifier may flag concurrency edge cases →
-   confidence 0.6 → escalate to tier-2 → accept.
-4. Run *implement* at tier-1 → accept if tests pass.
-5. Print the cost ledger so you can see exactly which subtasks needed
-   escalation and the estimated savings vs. always running at tier-3.
+#### 2. Transform task (medium, multi-subtask)
+
+```
+$ copilot -p "/pyramid:pyramid Find any markdown links in README.md that point at a non-existent path or anchor. Do not edit files; report findings only." --autopilot
+
+✓ Pyramid MoA done — 3 subtasks, cost ~478 tw-units (vs ~10,150 always-T3 → ~95% saved).
+  Full report: ~/.copilot/session-state/<id>/files/pyramid-runs/find-broken-readme-links-…md
+```
+
+DAG: `extract-links` → `validate-targets` → `report`. All accepted at
+tier-1. Wall-clock ~163 s.
+
+#### 3. Synthesize task (medium, design-style)
+
+```
+$ copilot -p "/pyramid:pyramid Design how to add a --retry-budget=N flag to /pyramid:pyramid …" --autopilot
+
+✓ Pyramid MoA done — 2 subtasks, cost ~3500 tw-units (vs ~75,000 always-T3 → ~95% saved).
+  Full report: ~/.copilot/session-state/<id>/files/pyramid-runs/design-how-to-add-a-retry-budget-n-flag-…md
+```
+
+DAG: `survey-flag-and-loop` → `design-retry-budget`. Both accepted at
+tier-1 (Haiku-4.5 handled the design with confidence 0.82). The full
+Markdown report contains the per-subtask answers, file-by-file change
+plan, and a 7-step test plan. Wall-clock ~499 s.
+
+#### What gets written to disk
+
+Every run writes two paired files to `<session>/files/pyramid-runs/`:
+
+```
+<task-slug>-<YYYYMMDD-HHMMSS>.json   # machine-readable trace (config, DAG, subtasks, totals)
+<task-slug>-<YYYYMMDD-HHMMSS>.md     # human-readable report (DAG, answers, ledger, savings)
+```
+
+The JSON trace is the source of truth for benchmarking and post-hoc
+analysis. The Markdown report is what you open when you want to see why
+the router made a particular choice.
+
+#### Caveats observed during the smoke run
+
+- Token counts are currently estimated (`cost_estimated: true` in every
+  trace) — the host `task` tool does not yet surface per-call token
+  counts to the orchestrator. Treat absolute tw-unit numbers as
+  directional; relative comparisons within a single run are reliable.
+- The orchestrator may short-circuit the verifier on trivially atomic
+  read tasks (a known deviation from the spec; see baseline-metrics.md
+  defect B3).
+- Wall-clock for trivial tasks is dominated by orchestrator overhead
+  (decompose + verify + aggregate inference), not by the subtask itself.
 
 ## How it works
 
