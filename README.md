@@ -1,4 +1,4 @@
-# pyramid-moa — Pyramid Mixture-of-Agents plugin for Copilot CLI
+# pyramid — Pyramid Mixture-of-Agents plugin for Copilot CLI
 
 A Copilot CLI plugin that brings **hierarchical Mixture-of-Agents** routing to
 your terminal. Hands a task to the cheapest tier first, verifies the answer,
@@ -33,19 +33,16 @@ Verify:
 copilot plugin list
 ```
 
-In an interactive session:
-
-```
-/plugin list
-/agent          # should list tier1-fast, tier2-mid, tier3-deep, pyramid-verifier
-/skills list    # should list pyramid-orchestrate, -decompose, -verify, -aggregate
-```
-
 ## Usage
 
+In an interactive Copilot CLI session:
+
 ```
-/pyramid <task description> [flags]
+/pyramid:pyramid <task description> [flags]
 ```
+
+Copilot CLI namespaces plugin commands as `/<plugin>:<command>`, so the slash
+command for this plugin is `/pyramid:pyramid` (not `/pyramid`).
 
 ### Flags
 
@@ -69,7 +66,7 @@ In an interactive session:
 ### Example
 
 ```
-/pyramid Find the function that handles password reset and add rate limiting (max 5/hour per user)
+/pyramid:pyramid Find the function that handles password reset and add rate limiting (max 5/hour per user)
 ```
 
 The router will typically:
@@ -87,7 +84,7 @@ The router will typically:
 ## How it works
 
 ```
-/pyramid <task>
+/pyramid:pyramid <task>
    │
    ▼
 pyramid-orchestrate skill ──────────────────────────────────────────────┐
@@ -124,26 +121,6 @@ Since the only reason we escalated is that we *don't trust* the lower-tier
 output, the default `--anchor=off` shows higher tiers only the subtask + the
 verifier's critique. Use `--anchor=on` only when you have evidence the lower
 tier is usually directionally right.
-
-## Layout
-
-```
-pyramid/
-├── plugin.json
-├── README.md
-├── commands/
-│   └── pyramid.md
-├── agents/
-│   ├── tier1-fast.agent.md
-│   ├── tier2-mid.agent.md
-│   ├── tier3-deep.agent.md
-│   └── pyramid-verifier.agent.md
-└── skills/
-    ├── pyramid-orchestrate/SKILL.md
-    ├── pyramid-decompose/SKILL.md
-    ├── pyramid-verify/SKILL.md
-    └── pyramid-aggregate/SKILL.md
-```
 
 No MCP server, no hooks, no external runtime — everything piggybacks on the
 CLI's built-in `task` tool and its per-call `model` override.
