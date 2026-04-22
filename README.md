@@ -46,13 +46,52 @@ command for this plugin is `/pyramid:pyramid` (not `/pyramid`).
 
 ### Flags
 
-| Flag         | Default          | Description                                                                |
-|--------------|------------------|----------------------------------------------------------------------------|
-| `--track`    | `claude`         | Model family: `claude`, `gpt`, or `mixed`.                                 |
-| `--theta`    | `0.75,0.85`      | Confidence thresholds θ₁,θ₂ for escalating from tier 1→2 and 2→3.          |
-| `--max-tier` | `3`              | Hard ceiling on escalation.                                                |
-| `--anchor`   | `off`            | If `on`, pass the rejected lower-tier answer to higher tiers as context.   |
-| `--budget`   | (none)           | Optional cost cap (relative units) — stops further escalation when hit.    |
+| Flag                      | Default          | Description                                                                |
+|---------------------------|------------------|----------------------------------------------------------------------------|
+| `--track`                 | `claude`         | Model family: `claude`, `gpt`, or `mixed`.                                 |
+| `--theta`                 | `0.75,0.85`      | Confidence thresholds θ₁,θ₂ for escalating from tier 1→2 and 2→3.          |
+| `--max-tier`              | `3`              | Hard ceiling on escalation.                                                |
+| `--anchor`                | `off`            | If `on`, pass the rejected lower-tier answer to higher tiers as context.   |
+| `--budget`                | (none)           | Cost cap in **token-weighted units** (tw-units). Stops escalation when hit. |
+| `--dry-run`               | `off`            | Print the DAG and planned tiers without dispatching.                       |
+| `--output`                | `quiet`          | Terminal verbosity: `quiet`, `normal`, or `debug`. **New default in 0.2.0**. |
+| `--value-of-correctness`  | `8`              | VoC scaling factor (was `10` pre-0.2.0; re-tuned for token-weighted costs).|
+
+### Output verbosity
+
+By default (`--output=quiet`) the terminal shows just two lines:
+
+```
+✓ Pyramid MoA done — 3 subtasks, cost 1240 tw-units (vs 18200 always-T3 → 93% saved).
+  Full report: ~/.copilot/session-state/<id>/files/pyramid-runs/<task>-<ts>.md
+```
+
+The full report — DAG, per-subtask answers, cost ledger, raw `pyramid-*`
+blocks — is **always** written to disk at the printed path. Open it on
+demand for the scientific detail. Use `--output=normal` to also see the
+final answer + ledger inline, or `--output=debug` to mirror v0.1.0's
+verbose output.
+
+### Cost units
+
+As of v0.2.0, all cost values (`--budget`, ledger totals, savings) are
+**token-weighted units**:
+
+```
+cost(call) = (input_tokens + output_tokens) * multiplier(model)
+```
+
+| Model              | Multiplier |
+|--------------------|------------|
+| claude-haiku-4.5   | 0.33       |
+| claude-sonnet-4.6  | 1.00       |
+| claude-opus-4.7    | 7.00       |
+
+GPT-track multipliers are placeholder — see
+`skills/pyramid-verify/SKILL.md`. Pre-0.2.0 the cost flag was documented as
+USD but always operated on flat ordinals (`1 / 5 / 25`). The new units are
+proportional to actual model spend, so the ratio Haiku:Sonnet:Opus is now
+`1 : 3 : 21` instead of the legacy `1 : 5 : 25`.
 
 ### Tier mapping
 
