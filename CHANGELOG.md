@@ -2,6 +2,38 @@
 
 All notable changes to this plugin are documented here.
 
+## 0.2.3 — Fix C3-residual quiet-mode leakage (#7)
+
+### Fixed
+
+- **C3 residual (#7)** — While v0.2.1 introduced the hard quiet contract,
+  ~3 of 7 baseline tasks still leaked answer-body text, headings, lists, or
+  tables to the terminal at `--output=quiet`. Root cause: the quiet
+  contract was described in `pyramid-aggregate` but not enforced as a
+  command-level post-condition, and the host agent assumed the contract was
+  advisory rather than mandatory.
+
+  Three changes:
+
+  1. `commands/pyramid.md` now includes a new "Post-conditions (hard
+     contract)" section at the end, restating the quiet rule in imperative
+     voice ("MUST", "MUST NOT") and cross-referencing the aggregate skill.
+  2. `skills/pyramid-aggregate/SKILL.md` — Updated both the quiet and
+     edge-case output templates to add a third line: `(Answer body
+     suppressed — pass --output=normal to see it here.)`. Added a new
+     "Quiet contract violation detection" subsection instructing the host
+     to prepend a `⚠ Quiet contract violated by host…` warning if it has
+     already leaked any body content in the same turn (self-attestation).
+  3. `plugin.json` version bumped to 0.2.3.
+
+### Notes
+
+- The quiet contract is now treated as a hard safety property, not a hint.
+- This release is backward-compatible with v0.2.x trace consumers; no
+  schema changes beyond cosmetic output.
+- The "violated by host" warning is retroactive (it does not prevent the
+  leak, only discloses it) to avoid host-side buffering complexity.
+
 ## 0.2.2 — fix B5 (cost-collapse on host-context calls)
 
 ### Fixed

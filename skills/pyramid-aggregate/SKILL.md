@@ -117,6 +117,7 @@ they pass `--output=normal`.
 ```
 ✓ Pyramid MoA done — <N> subtasks, cost <X> tw-units (vs <Y> always-T3 → <Z>% saved).
   Full report: <absolute path to .md report>
+  (Answer body suppressed — pass --output=normal to see it here.)
 ```
 
 When `totals.savings_pct is None` (B5 fix, v0.2.2 — happens when
@@ -129,12 +130,27 @@ edge case:
 ⚠ Cost not measurable — work completed in host context (no task-tool dispatch).
 ✓ Pyramid MoA done — <N> subtasks, cost not measurable (host context).
   Full report: <absolute path to .md report>
+  (Answer body suppressed — pass --output=normal to see it here.)
 ```
 
 Never print `0% saved` or `0.0 tw-units (vs 0.0 always-T3)`. Both are
 mathematically defensible but actively misleading: a casual reader sees
 "0% saved" and concludes the plugin did nothing of value, when in
 reality the cost simply wasn't measurable.
+
+### Quiet contract violation detection (C3 fix, v0.2.3)
+
+Before printing the quiet summary, **check with self-attestation**: if you
+(the host) have already emitted any answer body, markdown headings, bullet
+lists, code blocks, or other commentary in this same turn, prepend this
+warning before the summary:
+
+```
+⚠ Quiet contract violated by host — answer body leaked above. The 2-line summary below is canonical; everything above the warning is non-canonical leakage.
+```
+
+This catches host-side violations of the contract. Do not filter or suppress
+the leaked content; the violation warning is a retroactive disclosure.
 
 ### Always-on warnings (any verbosity)
 
