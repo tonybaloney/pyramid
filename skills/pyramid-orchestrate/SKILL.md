@@ -122,10 +122,22 @@ After each `task`-tool dispatch, capture:
 
 - `model`: the model id passed to the call.
 - `input_tokens`, `output_tokens`: read from the tool's response if surfaced.
-  If not surfaced, estimate as `len(prompt) / 4` and `len(answer_text) / 4`
-  respectively, and set `cost_estimated: true`.
+  If not surfaced, estimate as follows (B5 fix, v0.2.2):
+    - `input_tokens  = max(MIN_TOKENS_PER_CALL, ceil(len(prompt)        / 4))`
+    - `output_tokens = max(MIN_TOKENS_PER_CALL, ceil(len(answer_text)   / 4))`
+  where `MIN_TOKENS_PER_CALL = 50`. This floor prevents a host-context
+  call (where `prompt`/`answer_text` are unavailable and default to "")
+  from collapsing tokens — and therefore `cost_tw_units` — to **zero**,
+  which silently disables the savings calculation. Set
+  `cost_estimated: true` whenever this fallback fires.
 - `cost`: `(input_tokens + output_tokens) * multiplier(model)` (multipliers
   defined in `pyramid-verify` SKILL).
+
+If a call genuinely has no LLM dispatch (e.g. a pure inline computation
+the orchestrator does itself), do NOT append a `call` entry — leave
+`subtask.calls = []`. The B5 floor is for *attempted* dispatches whose
+token counts could not be measured, not for things that were never
+dispatched.
 
 ### Totals computed at the end
 
@@ -134,6 +146,8 @@ numbers. It must always recompute from `subtasks[*].calls[*]`; never
 read or sum any per-verdict `estimated_cost_used` field.
 
 ```python
+MIN_TOKENS_PER_CALL = 50  # B5 floor — see "Capturing call metadata"
+
 def compute_totals(trace, dag, multiplier):
     calls = [c for st in trace["subtasks"] for c in st["calls"]]
     tokens_in  = sum(c["input_tokens"]  for c in calls)
@@ -141,6 +155,13 @@ def compute_totals(trace, dag, multiplier):
     cost_tw    = sum((c["input_tokens"] + c["output_tokens"])
                      * multiplier(c["model"]) for c in calls)
     cost_t3    = (tokens_in + tokens_out) * multiplier(track_models[3])
+    # B5: if cost_t3 is 0 (no calls, or all calls had zero tokens despite
+    # the floor — should not happen in practice), savings_pct is undefined.
+    # Surface that explicitly with `null`, never paper over with 0.
+    if cost_t3 > 0:
+        savings_pct = round(100 * (1 - cost_tw / cost_t3), 2)
+    else:
+        savings_pct = None
     return {
       "subtasks_total":             len(trace["subtasks"]),
       "subtasks_accepted":          sum(1 for st in trace["subtasks"] if st["accepted"]),
@@ -152,7 +173,7 @@ def compute_totals(trace, dag, multiplier):
       "tokens_out_total":           tokens_out,
       "cost_tw_units":              round(cost_tw, 2),
       "cost_tw_units_always_tier3": round(cost_t3, 2),
-      "savings_pct":                round(100 * (1 - cost_tw / cost_t3), 2) if cost_t3 else 0,
+      "savings_pct":                savings_pct,                # None when cost_t3 == 0
       "wall_clock_ms":              sum(c.get("latency_ms") or 0 for c in calls),
       "cost_estimated":             any(c.get("cost_estimated") for c in calls),
     }

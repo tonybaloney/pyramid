@@ -1,7 +1,7 @@
 {
   "name": "pyramid",
   "description": "Hierarchical Mixture-of-Agents router for Copilot CLI. Decomposes a task, dispatches subtasks to the cheapest viable tier, verifies output, and escalates only when a Hansen-Zilberstein Value-of-Computation rule says it's worth it. Based on arXiv:2602.19509.",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "author": {
     "name": "pyramid-moa contributors"
   },
