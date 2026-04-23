@@ -70,3 +70,16 @@ When invoked, you (the host agent) MUST:
 
 Do **not** attempt to solve the task yourself — your role for this command is
 strictly to drive the pyramid skills.
+
+## Post-conditions (hard contract)
+
+When `--output=quiet` (the default), the terminal output **MUST** be:
+
+1. Zero or more `⚠` warning lines (one per warning).
+2. Exactly two lines: the cost summary and the full report path.
+
+You **MUST NOT** also print the synthesized answer body, markdown headers, bullet lists, tables, code blocks, or any other commentary at quiet level.
+
+The full answer is in the per-run Markdown report written by `pyramid-aggregate` in Step 1 — that is the user's escape hatch. If the user wants the answer inline, they MUST pass `--output=normal`.
+
+See `skills/pyramid-aggregate/SKILL.md` § "Hard contract — quiet means quiet" for details.
