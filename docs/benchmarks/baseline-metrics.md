@@ -15,6 +15,130 @@ and a before/after comparison against the prior baseline.
 
 ---
 
+## Baseline #2 — full benchmark (12 tasks × 1 run, v0.2.1, 2026-04-23)
+
+**Status:** _full 12-task suite, 1 run per task (no median per `tasks.md` §
+methodology, deferred for cost). Adversarial tasks (#10, #11) excluded from
+savings averages per the spec but included for terminate-cleanly grading._
+
+**Methodology delta vs `tasks.md`:** n=1 per task (not 3); no `--max-tier=1`
+control collected (always-T3 baseline computed analytically from captured
+token totals × Opus multiplier 7.00). Each task invoked via
+`copilot -p "/pyramid:pyramid <task>" --allow-all-tools --autopilot` from a
+fresh shell, in 3 staggered batches of 4 tasks parallel each. Plugin
+installed from `origin/main` at commit `37ca093` (v0.2.1).
+
+**Per-task table:**
+
+| # | Task slug                              | Subtasks | T1 / T2 / T3 disp. | Vrf. | Tokens (in/out)  | Cost (tw)     | Always-T3 (tw) | Saved   | Wall-clock | Gate    |
+|---|----------------------------------------|----------|--------------------|------|------------------|---------------|----------------|---------|------------|---------|
+| 1 | list-md-modified-7d                    | 1        | 1 / 0 / 0          | 1    | 300 / 360        | 217.8         | 4,620          | 95.3 %  | 30 m 08 s¹ | PASS    |
+| 2 | rename-pyramid-verify-skill            | _no JSON_| _no JSON_          | _na_ | _no JSON_²       | _no JSON_²    | _no JSON_²     | _n/a_   | 32 m 15 s¹ | partial² |
+| 3 | fix-broken-readme-links                | 1        | 1 / 0 / 0          | 1    | 1,300 / 570      | 617.1         | 13,090         | 95.3 %  | 31 m 47 s¹ | PASS    |
+| 4 | add-retry-budget-flag                  | 1        | 1 / 0 / 0          | 1    | 2,600 / 1,750    | 1,435.5       | 30,450         | 95.3 %  | 32 m 40 s¹ | PARTIAL³ |
+| 5 | refactor-orchestrate-split-logging     | 1        | 0 / 1 / 0          | 1    | 1,450 / 1,980    | 3,430.0       | 24,010         | 85.7 %  | 5 m 05 s   | PASS    |
+| 6 | anchoring-degrades-accuracy            | 1        | 1 / 0 / 0          | 1    | 1,120 / 480      | 528.0         | 11,200         | 95.3 %  | 2 m 33 s   | PASS    |
+| 7 | sandbox-untrusted-plugins              | 7        | 4 / 3 / 0          | 8    | 33,600 / 33,400  | 36,912.0      | 469,000        | 92.1 %  | 35 m 58 s¹ | PARTIAL⁴ |
+| 8 | api-docs-for-skills                    | 2        | 2 / 0 / 0          | 2    | 0 / 0            | **0.0**⁵      | **0.0**⁵       | 0 %⁵    | 3 m 11 s   | PARTIAL⁵ |
+| 9 | verify-agent-tools-frontmatter         | _no JSON_| _bypassed_⁶        | _na_ | 118 k host-side⁶ | _bypassed_⁶   | _bypassed_⁶    | _n/a_   | 1 m 14 s   | FAIL⁶   |
+| 10| quantum-resistant-verifier (adversarial)| _killed_⁷| _killed_⁷         | _na_ | _killed_⁷        | _killed_⁷     | _killed_⁷      | _n/a_   | _killed_⁷  | FAIL⁷   |
+| 11| "make it better" (adversarial)         | _killed_⁷| _killed_⁷         | _na_ | _killed_⁷        | _killed_⁷     | _killed_⁷      | _n/a_   | _killed_⁷  | FAIL⁷   |
+| 12| dry-run of #5                          | _no JSON_| _bypassed_⁶        | _na_ | 103 k host-side⁶ | _bypassed_⁶   | _bypassed_⁶    | _n/a_   | 1 m 30 s   | FAIL⁶   |
+
+¹ Wall-clock inflated by 4-way parallel batches contending for Copilot API
+   throughput; the smoke baseline at v0.2.0 measured the same workloads at
+   ~2–8 min when run sequentially. Cost figures (premium requests, tokens)
+   are unaffected by parallelism — see "Findings" below.
+² Task 2 regression: orchestrator dispatched a single subtask, then the host
+   agent dumped the full ~1.2 MB grep-and-summary answer body inline at
+   `--output=quiet`, never reached `pyramid-aggregate`, no JSON trace
+   written. C3 contract violated under high token-count workloads.
+³ Per-task gate required at least one escalation; task accepted at T1
+   instead. Same pattern as #1: tier-1 (Haiku) handled it cleanly so the
+   verifier accepted — calibration finding C1 from Baseline #1 reconfirmed.
+⁴ Per-task gate required final tier = 3; sandboxing design accepted at T2
+   for every subtask. The decompose split it into 7 small subtasks each
+   solvable in T1/T2, so the gate is mis-calibrated rather than the run.
+⁵ **New defect B5:** when subtask work happens entirely in the host
+   context (no `task` tool dispatch), token counts are estimated as 0,
+   collapsing cost to 0. Surfaced cleanly via `cost_estimated: true` and a
+   `⚠` warning, but the savings number is meaningless.
+⁶ **New defect B6:** for "trivial" tasks the host agent occasionally
+   bypasses `pyramid-orchestrate` entirely and answers in 1 premium
+   request. No DAG, no verifier, no trace. The pipeline is silently
+   skipped — the user has no way to know they didn't get MoA routing.
+⁷ **Adversarial gate failure:** tasks 10 and 11 are designed to test
+   `max_tier`-without-accept and decomposition robustness on vague prompts.
+   The orchestrator instead began making real code edits to `agents/`,
+   `skills/`, `AGENTS.md`, `commands/pyramid.md`, etc. Killed manually and
+   reverted via `git stash`. Per-task gate "subtask reaches max_tier" failed.
+
+**Aggregate metrics (non-adversarial subset, n=7 with traces):**
+
+| Metric                                     | Target  | Measured     |
+|--------------------------------------------|---------|--------------|
+| Mean savings vs always-tier-3 (#1,3,4,5,6,7) | ≥ 35 % | **93.2 %**¹ |
+| Tier-1 accept rate (#1,3,4,6,7-T1 nodes)   | ≥ 60 %  | 83 % (5/6)   |
+| Tier-3 dispatch rate (excl. #7,#10)        | ≤ 15 %  | **0 %**      |
+| Median terminal output lines at quiet      | ≤ 5     | **2 (#1,3,4,7,8)** ; ⚠ leaked on #2,#5,#6 |
+| `pyramid-verify` invoked on every dispatch | yes     | **yes** (B3 fix holding for traced runs) |
+| JSON trace written on every traced run     | yes     | **5 of 7** (#2,#9,#12 missing — bypass/regression) |
+
+¹ Excludes #8 (B5 zero-token bug) and the 5 tasks without traces.
+
+**Findings:**
+
+- **B1 cost arithmetic — FIXED.** All 7 traced runs report cost numbers
+  that match recomputation from per-call tokens. Baseline #1 had reported
+  a per-verdict scalar (`0.5`) for task #3; v0.2.1 reports `617.1` for the
+  same workload.
+- **B2 missing JSON trace — FIXED for the orchestrated path.** When
+  `pyramid-orchestrate` runs end-to-end the JSON trace appears (5/5).
+  Tasks #2, #9, #12 still lack JSON because the orchestrator was bypassed
+  upstream (B6) or the answer body was dumped inline (C3 leak on #2).
+- **B3 verifier short-circuit — FIXED.** Every traced run shows
+  `verifier_calls ≥ 1`. Tasks #1 / #3 / #4 each show exactly 1 verifier
+  call per subtask (no orchestrator-emitted decision blocks).
+- **B4 inline-resolved subtasks — FIXED.** Every node in `dag.nodes` is
+  represented in `tier_dispatches`; no node skipped. Task #7 dispatched
+  all 7 of its DAG nodes.
+- **C3 quiet output — PARTIALLY FIXED.** The 2-line summary template now
+  appears verbatim on tasks #1, #3, #4, #7, #8, but the host agent still
+  appends an answer body on tasks #2, #5, #6. The contract is in the
+  SKILL but the model treats it as advisory. Likely needs a stronger
+  framing (e.g., command-level post-condition) — opened as candidate for
+  v0.2.2.
+- **B5 (new) — host-context tokens collapse to 0.** Task #8 split into
+  2 subtasks the host completed itself; trace recorded `tokens=0` and
+  `cost=0`. The `⚠` warning surfaces but the cost number is misleading.
+- **B6 (new) — orchestrator-bypass on trivial tasks.** Tasks #9 and #12
+  used 1 premium request total and emitted no `pyramid-*` blocks. The
+  host agent decided "this is too small to MoA" and answered directly.
+  The pipeline must either (a) refuse to bypass at the command level,
+  or (b) emit a `⚠ pipeline bypassed` warning so the user knows.
+- **Adversarial gate failure (#10, #11).** Both tasks' purpose is to test
+  refusal / max-tier behavior. Instead the orchestrator (in `--autopilot`)
+  began real code edits. Need a `--read-only` invariant or a hard
+  "synthesize tasks must not edit files outside the report path" rule.
+- **Wall-clock inflation under parallelism.** Tasks run in 4-way parallel
+  batches took 30+ minutes each vs 2–8 min in the v0.2.0 sequential
+  smoke. Per-call premium request count (7.5) is unchanged, so the
+  bottleneck is API queueing, not pipeline depth.
+
+**v0.2.1 vs v0.2.0 — defect-fix matrix:**
+
+| Defect | Baseline #1 (v0.2.0) | Baseline #2 (v0.2.1) | Status |
+|--------|----------------------|----------------------|--------|
+| B1     | task #3: 0.5 (wrong) | task #3: 617.1 (correct) | ✓ fixed |
+| B2     | task #4: no JSON      | 5/5 traced runs have JSON | ✓ fixed (when orchestrated) |
+| B3     | task #1: 0 verifier   | task #1: 1 verifier, all subtasks verified | ✓ fixed |
+| B4     | task #3: 1 of 3 dispatched | task #7: 7 of 7 dispatched | ✓ fixed |
+| C3     | answer body always dumped | dumped on 3 of 7 (#2,#5,#6) | partial |
+| B5     | _not surfaced_        | task #8: cost=0 on host-context work | new |
+| B6     | _not surfaced_        | tasks #9, #12: pipeline bypassed | new |
+
+---
+
 ## Baseline #1 — smoke run (3 tasks × 1 run, v0.2.0, 2026-04-23)
 
 **Status:** _smoke benchmark only — 3 of 12 tasks, 1 run each (no median).
