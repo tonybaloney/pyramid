@@ -119,6 +119,23 @@ they pass `--output=normal`.
   Full report: <absolute path to .md report>
 ```
 
+When `totals.savings_pct is None` (B5 fix, v0.2.2 — happens when
+`cost_tw_units_always_tier3 == 0`, i.e. no LLM calls were measurable),
+substitute the savings clause with `cost not measurable (host context)`
+and prepend a `⚠ Cost not measurable` warning. Concrete template in that
+edge case:
+
+```
+⚠ Cost not measurable — work completed in host context (no task-tool dispatch).
+✓ Pyramid MoA done — <N> subtasks, cost not measurable (host context).
+  Full report: <absolute path to .md report>
+```
+
+Never print `0% saved` or `0.0 tw-units (vs 0.0 always-T3)`. Both are
+mathematically defensible but actively misleading: a casual reader sees
+"0% saved" and concludes the plugin did nothing of value, when in
+reality the cost simply wasn't measurable.
+
 ### Always-on warnings (any verbosity)
 
 Even at `quiet`, surface a one-line `⚠` warning above the summary for:

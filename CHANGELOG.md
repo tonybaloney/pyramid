@@ -2,6 +2,40 @@
 
 All notable changes to this plugin are documented here.
 
+## 0.2.2 — fix B5 (cost-collapse on host-context calls)
+
+### Fixed
+
+- **B5 (#5)** — When a subtask's LLM call did not surface token counts
+  (the `task` tool's typical case), the orchestrator's fallback estimator
+  computed `len(prompt or "") / 4`. If the host completed work in its own
+  context the prompt and answer text were both empty strings, collapsing
+  the call's tokens — and therefore `cost_tw_units` and
+  `cost_tw_units_always_tier3` — to `0.0`. The quiet summary then printed
+  `cost 0.0 tw-units (vs 0.0 always-T3 → 0% saved)`, which is
+  mathematically defensible but actively misleading. (Surfaced in
+  Baseline #2, task #8.)
+
+  Two changes:
+
+  1. `skills/pyramid-orchestrate/SKILL.md` § "Capturing call metadata"
+     pins a per-call floor: `MIN_TOKENS_PER_CALL = 50`, applied to both
+     `input_tokens` and `output_tokens` in the unmeasured-tokens fallback.
+     A genuinely no-dispatch subtask must produce `subtask.calls = []`,
+     not a synthetic zero-token call.
+  2. `compute_totals` now returns `savings_pct = None` (instead of `0`)
+     when `cost_tw_units_always_tier3 == 0`. The aggregate skill's quiet
+     template substitutes a `cost not measurable (host context)` clause
+     and prepends a `⚠` warning rather than printing the misleading
+     `0% saved`.
+
+### Notes
+
+- No trace-shape changes beyond `savings_pct` being nullable. Existing
+  trace consumers should treat `None`/`null` as "undefined", not zero.
+- B6 (issue #6, orchestrator-bypass) and the residual C3 leak (issue #7)
+  are out of scope for this release.
+
 ## 0.2.1 — smoke-benchmark fixes (B1–B4, C3)
 
 ### Fixed
