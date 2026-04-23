@@ -1,0 +1,91 @@
+ÔùÅ skill(pyramid)
+
+Ô£ù Read SKILL.md
+  Ôöé ~\.copilot\installed-plugins\_direct\tonybaloney--pyramid\skills\pyramid-orc
+  Ôöé hestrate\SKILL.md
+  Ôöö Permission denied and could not request permission from user
+
+Ô£ù List pyramid skill files (shell)
+  Ôöé Get-ChildItem C:\Users\anthonyshaw\.copilot\installed-plugins\_direct\tonyba
+  Ôöé loney--pyramid\skills -Recurse -File | Select-Object FullName
+  Ôöö Permission denied and could not request permission from user
+
+ÔùÅ skill(pyramid-orchestrate)
+
+ÔùÅ skill(pyramid-decompose)
+
+```pyramid-dag
+{
+  "task": "Design (do not implement) how to add a --retry-budget=N flag to the /pyramid:pyramid command. Show the parsing change, default value, and where in pyramid-orchestrate it would be consumed.",
+  "nodes": [
+    {
+      "id": "design-retry-budget-flag",
+      "kind": "synthesize",
+      "description": "Produce a design (no code edits) describing the --retry-budget=N flag: parsing/defaulting in commands/pyramid.md and the consumption point in skills/pyramid-orchestrate/SKILL.md.",
+      "difficulty_prior": 0.55,
+      "dependencies": [],
+      "success_criteria": "Design specifies (a) exact addition to /pyramid flag table and pyramid_config, (b) chosen default value with rationale, (c) precise location and semantics of consumption inside the orchestrate algorithm, including interaction with max_tier and budget."
+    }
+  ]
+}
+```
+
+Now dispatching this single node. `difficulty_prior=0.55` ÔåÆ tier 1 per `pick_initial_tier`.
+
+```pyramid-result
+{
+  "subtask_id": "design-retry-budget-flag",
+  "answer": "# Design: `--retry-budget=N` flag for `/pyramid:pyramid`\n\n## 0. Summary\n\nAdd a new optional flag `--retry-budget=N` to the `/pyramid:pyramid` slash command. It caps the **number of escalations the orchestrator may perform per subtask** (i.e. the number of times a `reject`/`revise` verdict is allowed to bump `tier` upward and re-dispatch). It is a strict per-subtask counter, orthogonal to but coordinated with `max_tier` and the global cost `budget`.\n\n## (a) Parsing change in `commands/pyramid.md`\n\n### a.1 Flag table\n\nAdd a new row to the existing flag table (the same table that documents `--track`, `--theta`, `--max-tier`, `--anchor`, `--budget`, `--dry-run`, `--output`, `--value-of-correctness`). Insert it immediately **after `--max-tier`** so related ceiling-style controls are grouped:\n\n| Flag | Type | Default | Description |\n|------|------|---------|-------------|\n| `--retry-budget=N` | integer ÔëÑ 0 | `2` | Maximum number of escalations allowed per subtask before the orchestrator must accept the best-so-far answer. An \"escalation\" is one transition from tier *k* to tier *k+1* triggered by a `reject` / `revise` verdict. `0` disables retries entirely (single-shot tier-1). |\n\n### a.2 `pyramid_config` storage (Step 1)\n\nIn the bullet list under Step 1 (\"What this command does\") that enumerates the fields stored on `pyramid_config`, add `retry_budget` to the list, between `max_tier` and `anchor`:\n\n> `... trackÔåÆtier-model map, theta, max_tier, **retry_budget**, anchor, budget, dry_run, output_level, value_of_correctness, session_dir`.\n\nValidation rules to add to Step 1:\n- Coerce to non-negative int; reject negatives with a usage error.\n- If `retry_budget > (max_tier - 1)`, clamp silently to `max_tier - 1` and emit a one-line note in the run log (because more retries than tier headroom is unreachable anyway).\n- If omitted, default to `2`.\n\n### a.3 Step 2 (no behavioural change here)\n\nStep 2 already passes `pyramid_config` into `pyramid-orchestrate`; the new field rides along automatically. No additional wording needed beyond mentioning that `retry_budget` is part of the config handed off.\n\n## (b) Default value and rationale\n\n**Default: `2`.**\n\nRationale, grounded in the existing ceiling:\n- The current orchestrator already documents an \"infinite-loop guard: at most 2 escalations per subtask (tier 1ÔåÆ2ÔåÆ3)\". The existing implicit budget is therefore **2**.\n- Choosing `2` as the default makes the new flag a **non-breaking, beh```pyramid-result
+{
+  "subtask_id": "design-retry-budget-flag",
+  "answer": "# Design: `--retry-budget=N` flag for `/pyramid:pyramid`\n\n## 0. Summary\n\nAdd a new flag `--retry-budget=N` that caps the **number of escalations performed per subtask** (i.e. the number of times the orchestrator's per-subtask `while True` loop re-dispatches to a higher tier after a `revise` verdict). It is a per-subtask counter, evaluated alongside (not replacing) the existing `max_tier` ceiling and the global `budget`. Default: **2**, matching today's implicit 1ÔåÆ2ÔåÆ3 ceiling so the flag is backward-compatible.\n\n## (a) Parsing change in `commands/pyramid.md`\n\n1. **Flag table** (the section that documents `--track`, `--theta`, `--max-tier`, `--anchor`, `--budget`, `--dry-run`, `--output`, `--value-of-correctness`): add a new row immediately after `--max-tier` so related ceilings sit together:\n\n   | Flag | Type | Default | Description |\n   |------|------|---------|-------------|\n   | `--retry-budget=N` | non-negative integer | `2` | Maximum number of escalations allowed per subtask. `0` disables retries (accept tier-1 answer or fall through to budget/`max_tier` exit). Counted independently per subtask; does not roll over. |\n\n2. **Step 1 (\"parse flags / apply defaults / build `pyramid_config`\")**: extend the parser to accept `--retry-budget=<int>`, validate `N >= 0`, default to `2` when omitted, and store the parsed value as a new field `retry_budget` in the `pyramid_config` object that step 1 emits. Update the bulleted list of `pyramid_config` fields in that step to include `retry_budget` between `max_tier` and `anchor` so the document order matches the flag table.\n\n3. **Step 2** does not change in shape ÔÇö it still invokes `pyramid-orchestrate` with `pyramid_config`, which now carries `retry_budget`.\n\nNo other commands/files in `commands/` are touched.\n\n## (b) Default value and rationale\n\n**Default: `2`.**\n\nRationale:\n- Today the per-subtask loop is bounded only by `tier == max_tier`. With the standard 3-tier ladder (1ÔåÆ2ÔåÆ3), that ceiling allows **at most 2 escalations** (1ÔåÆ2 and 2ÔåÆ3), and the SKILL's \"Infinite-loop guard\" comment states this explicitly.\n- Choosing `2` therefore preserves exact current behavior when `max_tier=3` (the common case): no run that worked before will be cut shorter.\n- It also makes the bound **explicit and tier-agnostic**: if a user later raises `max_tier` (e.g. adds a tier 4), the retry budget still caps wasted escalations unless they opt in by raising `--retry-budget` too.\n- `0` is meaningful (\"never retry, accept tier-1 best-so-far\") and useful for `--dry-run`/cost-sensitive runs, so the lower bound is `0`, not `1`.\n\n## (c) Where the value is consumed in `skills/pyramid-orchestrate/SKILL.md`\n\n### c.1 \"Inputs\" section\nAdd `retry_budget: int (>=0)` to the listed `pyramid_config` fields, directly under `max_tier`, with a one-line description: \"max escalations per subtask; counts each transition from one tier to a higher tier within a single subtask's loop.\"\n\n### c.2 Per-subtask escalation loop\nThe change is local to the existing block:\n\n```\nwhile True:\n    ... dispatch(tier, ...) ...\n    verdict = invoke pyramid-verify(...)\n    if verdict.decision == \"accept\" or tier == pyramid_config.max_tier:\n        results[node.id] = answer\n        break\n    tier = verdict.next_tier\n    last_answer = answer\n    last_verdict = verdict\n```\n\nModify it (in the SKILL prose, not as code we ship here) so that:\n\n1. Before the loop: initialize `escalations = 0` (scoped to this subtask).\n2. The exit condition becomes a three-way OR: **accept** OR `tier == pyramid_config.max_tier` OR `escalations >= pyramid_config.retry_budget`. When the exit fires due to the retry-budget clause, the orchestrator follows the **same \"accept best-so-far\"** path it already uses for the global `budget` exhaustion case (record `last_answer`, attach a `reason: \"retry_budget_exhausted\"` note in the result, do not mark the subtask as failed).\n3. After computing `tier = verdict.next_tier`, increment `escalations += 1`. (Counting the *transition*, so `retry_budget=0` means we never leave tier 1 even if verify says `revise`.)\n\nThe counter is reset for each subtask ÔÇö it is **per-subtask**, mirroring the existing infinite-loop guard's scope. It is **not** a global cross-subtask quota; the global cost ceiling is still `budget`.\n\n### c.3 Interaction with `max_tier` and `budget`\n\nThe SKILL's \"Failure handling\" / \"Infinite-loop guard\" subsection should be updated to specify the precedence when more than one stop condition could trigger on the same iteration. Evaluation order at the top of each post-verify check:\n\n1. **`verdict.decision == \"accept\"`** ÔåÆ accept current answer (highest priority; success path).\n2. **Global `budget` projection** (existing rule: if next escalation's projected token-weighted cost would exceed remaining `budget`) ÔåÆ accept best-so-far, reason `budget_exhausted`. Checked before incrementing tier so we don't pay for a dispatch we can't afford.\n3. **`tier == pyramid_config.max_tier`** ÔåÆ accept best-so-far, reason `max_tier_reached`.\n4. **`escalations >= pyramid_config.retry_budget`** ÔåÆ accept best-so-far, reason `retry_budget_exhausted`.\n\nSemantics of the interaction:\n- `retry_budget` is an **upper bound that is independent of and never overrides** `max_tier`; whichever binds first wins. With defaults (`max_tier=3`, `retry_budget=2`) they bind on the same iteration, preserving today's behavior.\n- `retry_budget` is **local** and cannot rescue the run from a global `budget` exhaustion: the global `budget` check still runs first because it protects the whole session, not just one subtask.\n- `retry_budget=0` short-circuits the loop after the first verify regardless of `max_tier`, providing a cheap \"tier-1 only with verification\" mode that composes cleanly with `--dry-run`.\n- The infinite-loop guard wording in the SKILL should be rephrased from \"at most 2 escalations per subtask ... enforced by `tier == max_tier`\" to \"at most `min(max_tier - start_tier, retry_budget)` escalations per subtask, enforced jointly by the `tier == max_tier` and `escalations >= retry_budget` exit conditions; defaults preserve the historical bound of 2.\"\n\nNo other section of `SKILL.md` (dispatch, verify contract, results aggregation) needs to change; `retry_budget` is read only inside the per-subtask loop and mentioned only in Inputs and Failure-handling.\n",
+  "self_confidence": 0.78,
+  "blocked_reason": null
+}
+```ÔùÅ Pyramid:tier1-fast Pyramid MoA tier-1 solving design-retry-budget-flag
+
+ÔùÅ skill(pyramid-verify)
+
+```pyramid-verdict
+{
+  "subtask_id": "design-retry-budget-flag",
+  "confidence": 0.82,
+  "issues": ["Precedence list reorders global-budget check ahead of tier==max_tier, which subtly differs from current code where accept/max_tier are checked together ÔÇö worth flagging as an intentional change rather than a no-op.", "Counter increment timing (increment after assigning next_tier, check at top of next iteration) is correct but could be stated more explicitly to avoid an off-by-one risk during implementation."],
+  "would_benefit_from_escalation": false,
+  "evidence": "Verified against commands/pyramid.md flag table and skills/pyramid-orchestrate/SKILL.md lines 16-18, 53-77, 187, 300-301: the design correctly targets the per-subtask while-loop and the existing 'Infinite-loop guard' comment, default of 2 matches current 1ÔåÆ2ÔåÆ3 ceiling, and all three deliverables (a/b/c) are addressed concretely with explicit precedence ordering."
+}
+```ÔùÅ Pyramid:pyramid-verifier Verify tier-1 design output
+  Ôöé Read pyramid.md
+  Ôöé   Ôöé commands\pyramid.md
+  Ôöé   Ôöö 72 lines read
+  Ôöö Search (grep)
+      Ôöé "max_tier|while|escalat|budget" (skills\pyramid-orchestrate\SKILL.md)
+      Ôöö 14 lines found
+
+Verdict 0.82 ÔëÑ ╬©Ôéü=0.75 and `would_benefit_from_escalation=false` ÔåÆ **accept**. No escalation.
+
+ÔùÅ skill(pyramid-aggregate)
+
+ÔùÅ Make timestamp and dir (shell)
+  Ôöé $ts = Get-Date -Format "yyyyMMdd-HHmmss"; Write-Output $ts; New-Item
+  Ôöé -ItemType Directory -Force -Path "C:\Users\anthonyshaw\.copilot\session-stat
+  Ôöé e\e911a689-f6f2-4d3c-b5a0-b374c1bcca63\files\pyramid-runs" | Out-Null;
+  Ôöé Write-Output "ok"
+  Ôöö 3 lines...
+
+ÔùÅ Create design-do-not-implement-how-to-add-a-retry-bu-20260423-070512.md +123
+  Ôöö ~\.copilot\session-state\e911a689-f6f2-4d3c-b5a0-b374c1bcca63\files\pyramid-
+    runs\design-do-not-implement-how-to-add-a-retry-bu-20260423-070512.md
+
+ÔùÅ Create design-do-not-implement-how-to-add-a-retry-bu-20260423-070512.json +106
+  Ôöö ~\.copilot\session-state\e911a689-f6f2-4d3c-b5a0-b374c1bcca63\files\pyramid-
+    runs\design-do-not-implement-how-to-add-a-retry-bu-20260423-070512.json
+
+ÔÜá Token counts estimated (`cost_estimated: true`).
+Ô£ô Pyramid MoA done ÔÇö 1 subtask, cost 1435.5 tw-units (vs 30450.0 always-T3 ÔåÆ 95.3% saved).
+  Full report: C:\Users\anthonyshaw\.copilot\session-state\e911a689-f6f2-4d3c-b5a0-b374c1bcca63\files\pyramid-runs\design-do-not-implement-how-to-add-a-retry-bu-20260423-070512.md
+
+
+Changes   +229 -0
+Requests  7.5 Premium (32m 40s)
+Tokens    Ôåæ 1.0m ÔÇó Ôåô 15.6k ÔÇó 904.6k (cached)

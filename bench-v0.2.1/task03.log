@@ -1,0 +1,145 @@
+ÔùÅ skill(pyramid)
+
+ÔùÅ skill(pyramid-orchestrate)
+
+ÔùÅ skill(pyramid-decompose)
+
+```pyramid-dag
+{
+  "task": "Find any markdown link in README.md that points to a non-existent file path in this repo, and list each broken link with its line number. Do not edit.",
+  "nodes": [
+    {
+      "id": "scan-readme-links",
+      "kind": "read",
+      "description": "Read README.md, extract all markdown link targets that look like local file paths, resolve them against the repo, and emit a list of broken links with line numbers.",
+      "difficulty_prior": 0.25,
+      "dependencies": [],
+      "success_criteria": "Output is a list (possibly empty) of broken local markdown links from README.md, each with the source line number; no files are modified."
+    }
+  ]
+}
+```
+
+Now dispatching this single node to tier 1 (haiku, prior 0.25 ÔåÆ tier 1).
+
+I'll start by reading the tier1-fast.agent.md rules, then analyze the README.md for broken links.Now let me read the tier1-fast.agent.md rules:Perfect. Now I'll analyze the README.md systematically to find all markdown links and check if the local file paths exist.
+
+Let me extract all links from README.md:Good! I found 2 inline markdown links. Now let me check for reference-style links. Let me search for patterns like `[label]: target`:No reference-style links found. Now let me check the two inline links I found:
+
+1. Line 9: `[arXiv:2602.19509](https://arxiv.org/abs/2602.19509)` - This is an external URL (https://), so NOT a local file
+2. Line 108: `[`docs/benchmarks/baseline-metrics.md`](docs/benchmarks/baseline-metrics.md)` - This is a local file path
+
+Now I need to check if `docs/benchmarks/baseline-metrics.md` exists at the repo root:Great! The file exists. Let me continue checking the rest of the README to make sure I haven't missed anything. Let me search more thoroughly for any link patterns in tables and other contexts:Good review. I can see the full README. Let me also search for any other potential link patterns that might be less obvious:Perfect. I found all the bracket patterns. Now let me verify that there are exactly 2 markdown links with destinations:
+
+1. **Line 9**: `[arXiv:2602.19509](https://arxiv.org/abs/2602.19509)` - This is an **external URL** (https://), so it's **NOT** a local file to check
+2. **Line 108**: `[`docs/benchmarks/baseline-metrics.md`](docs/benchmarks/baseline-metrics.md)` - This is a **local file path**
+
+I already verified that `docs/benchmarks/baseline-metrics.md` exists. Let me do a comprehensive check to ensure I haven't missed any reference-style links or other patterns:No reference-style link definitions found. Let me verify my analysis is complete by checking if there are any other local links I might have missed (searching for any potential local paths):Let me try a simpler approach - looking for all destination URLs that don't start with common schemes:Let me search more simply for all `](` patterns and manually review:Perfect! This confirms there are exactly 2 markdown links with destinations in the README.md:
+
+1. **Line 9**: `[arXiv:2602.19509](https://arxiv.org/abs/2602.19509)` - External URL (https://) - **NOT a local file**
+2. **Line 108**: `[`docs/benchmarks/baseline-metrics.md`](docs/benchmarks/baseline-metrics.md)` - Local file path - **VERIFIED TO EXIST**
+
+Let me verify one more time that the file exists to be absolutely certain:Perfect! The file `baseline-metrics.md` exists in the `docs/benchmarks/` directory.
+
+## Summary
+
+I've performed an exhaustive scan of the README.md file:
+
+**Links found:**
+1. **Line 9**: `[arXiv:2602.19509](https://arxiv.org/abs/2602.19509)` - External URL (https://) - **NOT checked** (per constraints)
+2. **Line 108**: `[`docs/benchmarks/baseline-metrics.md`](docs/benchmarks/baseline-metrics.md)` - Local file path - **EXISTS at repo root/docs/benchmarks/baseline-metrics.md** Ô£ô
+
+**Reference-style link definitions:** None found
+
+**Result:** No broken local markdown links found in README.md.
+
+```pyramid-result
+{
+  "subtask_id": "scan-readme-links",
+  "answer": "No broken local markdown links found. Scanned README.md for inline markdown links [text](target) and reference-style definitions [label]: target. Found 1 local file path link: line 108 `[`docs/benchmarks/baseline-metrics.md`](docs/benchmarks/baseline-metrics.md)` which resolves to an existing file at `docs/benchmarks/baseline-metrics.md`. Found 1 external URL link (line 9, https://) which is not checked per constraints.",
+  "self_confidence": 0.95,
+  "blocked_reason": null
+}
+```ÔùÅ Pyramid:tier1-fast(claude-haiku-4.5) Pyramid MoA tier-1 solving subtask scan-readme-links
+  Ôöé Search (grep)
+  Ôöé   Ôöé "\]\(" (/Users/anthonyshaw/code/pyramid-moa/README.md)
+  Ôöé   Ôöö 2 lines found
+  Ôöö List directory /Users/anthonyshaw/code/pyramid-moa/docs/benchmarks
+      Ôöö 2 files found
+
+ÔùÅ skill(pyramid-verify)
+
+I'll independently verify the tier-1 answer by reading README.md and extracting all markdown links, then checking which are broken local paths.Now let me systematically extract all markdown links from README.md and check them. I'll look for:
+1. Inline links `[text](target)`
+2. Reference-style `[label]: target`
+3. Image links `![alt](target)`
+4. HTML `<a href="...">` tags
+
+Let me search for all patterns more carefully:Good! I found 2 inline links. Let me verify the actual lines:Perfect! I found:
+1. **Line 9**: `[arXiv:2602.19509](https://arxiv.org/abs/2602.19509)` - This is an external URL (https://) - should be **skipped**
+2. **Line 108**: `[docs/benchmarks/baseline-metrics.md](docs/benchmarks/baseline-metrics.md)` - This is a local path - should be **checked**
+
+Now let me verify if the file at `docs/benchmarks/baseline-metrics.md` exists:Excellent! The file `docs/benchmarks/baseline-metrics.md` exists.
+
+Now let me do a comprehensive check to ensure I haven't missed any links. Let me search more broadly for any other markdown link patterns, including in tables and code blocks:Good, so I've found exactly 2 markdown links in the file. Let me also check for any HTML links or other link patterns:Perfect. Summary of my findings:
+
+**All markdown links found in README.md:**
+1. **Line 9**: `https://arxiv.org/abs/2602.19509` ÔÇö External URL (https://) ÔåÆ **SKIP per spec**
+2. **Line 108**: `docs/benchmarks/baseline-metrics.md` ÔÇö Local path ÔåÆ **CHECK**
+
+**Verification of line 108 link:**
+- Target: `docs/benchmarks/baseline-metrics.md`
+- No fragments or query strings to strip
+- File exists at: `/Users/anthonyshaw/code/pyramid-moa/docs/benchmarks/baseline-metrics.md` Ô£ô
+
+**Conclusion:**
+- No broken local markdown links found
+- The tier-1 answer is **correct**
+
+The tier-1 answer correctly identified:
+- 1 local file path link on line 108 (which exists)
+- 1 external URL link on line 9 (correctly skipped)
+- No broken links
+
+```pyramid-verdict
+{
+  "subtask_id": "scan-readme-links",
+  "confidence": 0.95,
+  "issues": [],
+  "would_benefit_from_escalation": false,
+  "evidence": "Independently verified all markdown links in README.md: found 2 links total (line 9: external https:// URL correctly skipped; line 108: local path docs/benchmarks/baseline-metrics.md verified to exist). No broken local links."
+}
+```ÔùÅ Pyramid:pyramid-verifier(claude-haiku-4.5) Verify tier-1 answer for scan-readme-links
+  Ôöé Search (grep)
+  Ôöé   Ôöé "<a\s+href" (/Users/anthonyshaw/code/pyramid-moa/README.md)
+  Ôöé   Ôöö No matches found
+  Ôöö Search (grep)
+      Ôöé "!\[" (/Users/anthonyshaw/code/pyramid-moa/README.md)
+      Ôöö No matches found
+
+Decision: accept (confidence 0.95 ÔëÑ ╬©Ôéü=0.75). No escalation.
+
+ÔùÅ skill(pyramid-aggregate)
+
+ÔùÅ Ensure pyramid-runs dir exists (shell)
+  Ôöé $dir = "C:\Users\anthonyshaw\.copilot\session-state\df23d6b4-b5c7-4772-8b7b-
+  Ôöé 34a0f47e9c03\files\pyramid-runs"; New-Item -ItemType Directory -Force -Path
+  Ôöé $dir | Out-Null; Write-Output $dir
+  Ôöö 2 lines...
+
+ÔùÅ Create find-broken-readme-links-20260423-073500.json +50
+  Ôöö ~\.copilot\session-state\df23d6b4-b5c7-4772-8b7b-34a0f47e9c03\files\pyramid-
+    runs\find-broken-readme-links-20260423-073500.json
+
+ÔùÅ Create find-broken-readme-links-20260423-073500.md +104
+  Ôöö ~\.copilot\session-state\df23d6b4-b5c7-4772-8b7b-34a0f47e9c03\files\pyramid-
+    runs\find-broken-readme-links-20260423-073500.md
+
+ÔÜá Token counts are estimated.
+Ô£ô Pyramid MoA done ÔÇö 1 subtask, cost 617.1 tw-units (vs 13090.0 always-T3 ÔåÆ 95.3% saved).
+  Full report: C:\Users\anthonyshaw\.copilot\session-state\df23d6b4-b5c7-4772-8b7b-34a0f47e9c03\files\pyramid-runs\find-broken-readme-links-20260423-073500.md
+
+
+Changes   +154 -0
+Requests  7.5 Premium (31m 47s)
+Tokens    Ôåæ 1.0m ÔÇó Ôåô 11.3k ÔÇó 935.3k (cached)

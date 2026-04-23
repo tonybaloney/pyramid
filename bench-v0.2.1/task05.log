@@ -1,0 +1,77 @@
+ÔùÅ Read pyramid.md
+  Ôöé commands\pyramid.md
+  Ôöö 72 lines read
+
+ÔùÅ Read SKILL.md
+  Ôöé skills\pyramid-orchestrate\SKILL.md
+  Ôöö 301 lines read
+
+ÔùÅ Read SKILL.md
+  Ôöé skills\pyramid-aggregate\SKILL.md
+  Ôöö 145 lines read
+
+ÔùÅ Read SKILL.md
+  Ôöé skills\pyramid-verify\SKILL.md
+  Ôöö 127 lines read
+
+I'll run this through Pyramid: a small DAG (single design subtask), dispatched to tier-2, verified, then aggregated into a report file.
+
+ÔùÅ General-purpose(claude-sonnet-4.5) Design orchestrate split
+  Ôöé Read SKILL.md
+  Ôöé   Ôöé skills\pyramid-verify\SKILL.md
+  Ôöé   Ôöö 127 lines read
+  Ôöö Read pyramid.md
+      Ôöé commands\pyramid.md
+      Ôöö 72 lines read
+
+ÔùÅ General-purpose(claude-haiku-4.5) Verify design output
+
+Verifier: 0.75 confidence, would_benefit_from_escalation=false. VoC test (gain=0.1125, ├ù8=0.9 vs cost ratio 7) ÔåÆ **accept** at tier-2. Writing report and trace.
+
+ÔùÅ Create pyramid-runs dir (shell)
+  Ôöé $dir = "C:\Users\anthonyshaw\.copilot\session-state\68055c7e-ffd9-46e4-853d-
+  Ôöé 4183f9bbd0eb\files\pyramid-runs"; New-Item -ItemType Directory -Force -Path
+  Ôöé $dir | Out-Null; Write-Output $dir
+  Ôöö 2 lines...
+
+ÔùÅ Create refactor-pyramid-orchestrate-split-20260423-071100.json +83
+  Ôöö ~\.copilot\session-state\68055c7e-ffd9-46e4-853d-4183f9bbd0eb\files\pyramid-
+    runs\refactor-pyramid-orchestrate-split-20260423-071100.json
+
+ÔùÅ Create refactor-pyramid-orchestrate-split-20260423-071100.md +165
+  Ôöö ~\.copilot\session-state\68055c7e-ffd9-46e4-853d-4183f9bbd0eb\files\pyramid-
+    runs\refactor-pyramid-orchestrate-split-20260423-071100.md
+
+ÔÜá Token counts estimated (`cost_estimated: true`).
+Ô£ô Pyramid MoA done ÔÇö 1 subtask, cost 3430.0 tw-units (vs 24010.0 always-T3 ÔåÆ 85.7% saved).
+  Full report: `C:\Users\anthonyshaw\.copilot\session-state\68055c7e-ffd9-46e4-853d-4183f9bbd0eb\files\pyramid-runs\refactor-pyramid-orchestrate-split-20260423-071100.md`
+
+---
+
+## Design summary (no edits made)
+
+**Two skills:**
+- `pyramid-orchestrate` (refocused) ÔÇö Hansen-Zilberstein control loop only: DAG traversal, `pick_initial_tier`, `dispatch`, `build_context`, anchoring policy, escalate/accept, dry-run, failure handling. **Owns contracts B3 + B4.**
+- `pyramid-trace` (new) ÔÇö Observability layer: `call_meta` capture, `subtask_trace` dict, ledger, `compute_totals`, sanity assertion, file-path resolution, JSON writer. **Owns contracts B1 + B2.**
+
+**API seam (9 calls):** `init_run`, `start_subtask`, `record_dispatch`, `record_call`, `record_verdict`, `accept_subtask`, `escalate_subtask`, `get_spent_so_far`, `finalize_and_write`. Trace is library-style (no `task`-tool dispatch).
+
+**Call-site changes:**
+- `commands/pyramid.md` ÔÇö unchanged.
+- `skills/pyramid-orchestrate/SKILL.md` ÔÇö algorithm shrinks; trace sections move out.
+- `skills/pyramid-trace/SKILL.md` ÔÇö **new**.
+- `skills/pyramid-aggregate/SKILL.md` ÔÇö B2 wording: "written by `pyramid-trace` (invoked by `pyramid-orchestrate`)".
+- `skills/pyramid-verify/SKILL.md` ÔÇö unchanged.
+- `AGENTS.md`, `README.md`, `plugin.json` ÔÇö add `pyramid-trace` entry; bump skill count 4ÔåÆ5.
+- `docs/benchmarks/baseline-metrics.md` ÔÇö re-run for parity check.
+
+**Contract preservation:** B1 in trace's `compute_totals` + sanity assertion; B2 by orchestrate calling `finalize_and_write` synchronously before `pyramid-aggregate` (and aggregate keeps its existence re-check as defense-in-depth); B3/B4 unchanged in orchestrate's loop body ÔÇö trace API exposes no skip-verify or skip-dispatch hook.
+
+**Risks:** double source of truth for `spent_so_far` (mitigation: orchestrate must query trace, never accumulate locally); silent bypass of `record_call` (mitigation: `record_call` returns the `call_meta` orchestrate needs for `pyramid-verify`, so skipping is loud); debug visibility (mitigation: `pyramid-trace-debug.log` at `output=debug`); dry-run JSON drift (mitigation: trace writes a stub even in dry-run); aggregate path-threading (mitigation: pass `trace_path` returned from `finalize_and_write`).
+
+Full design with frontmatter, full responsibility table, per-event data-flow table, and full call-site table is in the report file above.
+
+
+Changes   +248 -0
+Requests  7.5 Premium (5m 5s)
+Tokens    Ôåæ 535.4k ÔÇó Ôåô 17.9k ÔÇó 393.4k (cached)

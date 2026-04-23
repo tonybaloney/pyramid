@@ -1,0 +1,80 @@
+ÔùÅ Read plugin.json
+  Ôöö 14 lines read
+
+ÔùÅ Search (glob)
+  Ôöé "agents/*.agent.md"
+  Ôöö 4 files found
+
+ÔùÅ Read tier3-deep.agent.md
+  Ôöé agents\tier3-deep.agent.md
+  Ôöö L1:20 (20 lines read)
+
+ÔùÅ Read tier2-mid.agent.md
+  Ôöé agents\tier2-mid.agent.md
+  Ôöö L1:20 (20 lines read)
+
+ÔùÅ Read tier1-fast.agent.md
+  Ôöé agents\tier1-fast.agent.md
+  Ôöö L1:20 (19 lines read)
+
+ÔùÅ Read pyramid-verifier.agent.md
+  Ôöé agents\pyramid-verifier.agent.md
+  Ôöö L1:20 (20 lines read)
+
+ÔùÅ Checking my documentation
+  Ôöö # GitHub Copilot CLI Documentation
+
+Here's the audit of all `tools` fields from agent frontmatter:
+
+---
+
+## Agent Tool Audit
+
+### Known real tools in Copilot CLI
+`bash`, `powershell`, `view`, `edit`, `create`, `grep`, `glob`, `task`
+
+---
+
+### Results
+
+| Agent | Tool | Status |
+|-------|------|--------|
+| `tier1-fast` | `bash` | Ô£à Known (Unix shell) |
+| `tier1-fast` | `powershell` | Ô£à Known |
+| `tier1-fast` | `view` | Ô£à Known |
+| `tier1-fast` | `edit` | Ô£à Known |
+| `tier1-fast` | `create` | Ô£à Known |
+| `tier1-fast` | `grep` | Ô£à Known |
+| `tier1-fast` | `glob` | Ô£à Known |
+| `tier2-mid` | `bash` | Ô£à Known |
+| `tier2-mid` | `powershell` | Ô£à Known |
+| `tier2-mid` | `view` | Ô£à Known |
+| `tier2-mid` | `edit` | Ô£à Known |
+| `tier2-mid` | `create` | Ô£à Known |
+| `tier2-mid` | `grep` | Ô£à Known |
+| `tier2-mid` | `glob` | Ô£à Known |
+| `tier2-mid` | `task` | Ô£à Known |
+| `tier3-deep` | `bash` | Ô£à Known |
+| `tier3-deep` | `powershell` | Ô£à Known |
+| `tier3-deep` | `view` | Ô£à Known |
+| `tier3-deep` | `edit` | Ô£à Known |
+| `tier3-deep` | `create` | Ô£à Known |
+| `tier3-deep` | `grep` | Ô£à Known |
+| `tier3-deep` | `glob` | Ô£à Known |
+| `tier3-deep` | `task` | Ô£à Known |
+| `pyramid-verifier` | `view` | Ô£à Known |
+| `pyramid-verifier` | `grep` | Ô£à Known |
+| `pyramid-verifier` | `glob` | Ô£à Known |
+| `pyramid-verifier` | `bash` | Ô£à Known |
+| `pyramid-verifier` | `powershell` | Ô£à Known |
+
+---
+
+**All 28 (agent, tool) pairs reference real tools.** No unknown or misspelled tool names found. No use of `all` wildcard.
+
+**One note:** `tier1-fast` and `pyramid-verifier` lack the `task` tool ÔÇö this is intentional by design (they're not allowed to spawn sub-agents, which matches their stated constraints in the AGENTS.md spec).
+
+
+Changes   +0 -0
+Requests  1 Premium (1m 14s)
+Tokens    Ôåæ 118.3k ÔÇó Ôåô 2.5k ÔÇó 99.7k (cached)

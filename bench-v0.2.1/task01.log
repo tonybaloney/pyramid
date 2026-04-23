@@ -1,0 +1,89 @@
+ÔùÅ skill(pyramid)
+
+ÔùÅ skill(pyramid-orchestrate)
+
+ÔùÅ skill(pyramid-decompose)
+
+Task is trivially atomic ("list" = read, prior 0.10). Single-node DAG.
+
+```pyramid-dag
+{
+  "task": "List all Markdown files in this repository modified in the last 7 days",
+  "nodes": [
+    {
+      "id": "list-recent-md",
+      "kind": "read",
+      "description": "List all Markdown files in the repository modified in the last 7 days.",
+      "difficulty_prior": 0.10,
+      "dependencies": [],
+      "success_criteria": "A complete list of *.md files (relative paths) whose last-modified timestamp is within the last 7 days from now."
+    }
+  ]
+}
+```
+
+Now dispatching to tier 1 per `pick_initial_tier(0.10) ÔåÆ 1`.
+
+```pyramid-result
+{
+  "subtask_id": "list-recent-md",
+  "answer": "Markdown files modified within 7 days of 2026-04-23T07:34:14+10:00 (cutoff: 2026-04-16T07:34:14+10:00):\n\n| Path | LastWriteTime |\n|---|---|\n| AGENTS.md | 2026-04-23T06:33:23+10:00 |\n| CHANGELOG.md | 2026-04-23T07:33:15+10:00 |\n| README.md | 2026-04-23T07:26:43+10:00 |\n| agents/pyramid-verifier.agent.md | 2026-04-22T14:45:43+10:00 |\n| agents/tier1-fast.agent.md | 2026-04-22T14:45:43+10:00 |\n| agents/tier2-mid.agent.md | 2026-04-22T14:45:43+10:00 |\n| agents/tier3-deep.agent.md | 2026-04-22T14:45:43+10:00 |\n| commands/pyramid.md | 2026-04-23T06:33:23+10:00 |\n| docs/benchmarks/baseline-metrics.md | 2026-04-23T07:26:43+10:00 |\n| docs/benchmarks/tasks.md | 2026-04-23T06:33:23+10:00 |\n| skills/pyramid-aggregate/SKILL.md | 2026-04-23T07:33:15+10:00 |\n| skills/pyramid-decompose/SKILL.md | 2026-04-22T14:47:11+10:00 |\n| skills/pyramid-orchestrate/SKILL.md | 2026-04-23T07:33:15+10:00 |\n| skills/pyramid-verify/SKILL.md | 2026-04-23T06:33:23+10:00 |\n\n(.git/ excluded; 14 files matched.)",
+  "self_confidence": 0.95,
+  "blocked_reason": null
+}
+```ÔùÅ Pyramid:tier1-fast Pyramid MoA tier-1 solving subtask list-recent-md
+  Ôöö List recently modified md files (shell)
+      Ôöé $cutoff = [datetime]::Parse('2026-04-23T07:34:14+10:00').AddDays(-7);
+      Ôöé $root = 'C:\Users\anthonyshaw\code\pyramid-moa'; Get-ChildItem -Path $root
+      Ôöé -Recurse -Filter *.md -File | Where-Object { $_.FullName -notmatch
+      Ôöé '\\\.git\\' -and $_.LastWriteTime -ge $cutoff } | ForEach-Object {
+      Ôöé '{0}`t{1}' -f ($_.FullName.Substring($root.Length+1)), ÔÇª
+      Ôöö 16 lines...
+
+ÔùÅ skill(pyramid-verify)
+
+14 files, exact match.
+
+```pyramid-verdict
+{
+  "subtask_id": "list-recent-md",
+  "confidence": 0.97,
+  "issues": [],
+  "would_benefit_from_escalation": false,
+  "evidence": "Re-ran Get-ChildItem with the stated cutoff; got exactly the same 14 relative paths the solver listed, .git excluded."
+}
+```ÔùÅ Pyramid:pyramid-verifier Verify tier-1 answer for list-recent-md
+  Ôöö List recent md files (shell)
+      Ôöé $cutoff = [datetime]::Parse('2026-04-16T07:34:14+10:00'); Get-ChildItem
+      Ôöé -Path C:\Users\anthonyshaw\code\pyramid-moa -Recurse -Filter *.md -File |
+      Ôöé Where-Object { $_.LastWriteTime -ge $cutoff -and $_.FullName -notmatch
+      Ôöé '\\\.git\\' } | ForEach-Object { Resolve-Path -Relative $_.FullName } |
+      Ôöé Sort-Object
+      Ôöö 15 lines...
+
+Verdict: confidence 0.97 ÔëÑ ╬©Ôéü=0.75 ÔåÆ **accept**. Now writing trace + report.
+
+ÔùÅ Create pyramid-runs directory (shell)
+  Ôöé $dir = "C:\Users\anthonyshaw\.copilot\session-state\17857494-d60d-4013-bb91-
+  Ôöé c2bd24fe56b5\files\pyramid-runs"; New-Item -ItemType Directory -Force -Path
+  Ôöé $dir | Out-Null; $dir
+  Ôöö 2 lines...
+
+ÔùÅ Create list-all-markdown-files-in-this-repository-20260423-073415.json +75
+  Ôöö ~\.copilot\session-state\17857494-d60d-4013-bb91-c2bd24fe56b5\files\pyramid-
+    runs\list-all-markdown-files-in-this-repository-20260423-073415.json
+
+ÔùÅ skill(pyramid-aggregate)
+
+ÔùÅ Create list-all-markdown-files-in-this-repository-20260423-073415.md +111
+  Ôöö ~\.copilot\session-state\17857494-d60d-4013-bb91-c2bd24fe56b5\files\pyramid-
+    runs\list-all-markdown-files-in-this-repository-20260423-073415.md
+
+ÔÜá Token counts estimated (not measured).
+Ô£ô Pyramid MoA done ÔÇö 1 subtask, cost 217.8 tw-units (vs 4620.0 always-T3 ÔåÆ 95.3% saved).
+  Full report: C:\Users\anthonyshaw\.copilot\session-state\17857494-d60d-4013-bb91-c2bd24fe56b5\files\pyramid-runs\list-all-markdown-files-in-this-repository-20260423-073415.md
+
+
+Changes   +186 -0
+Requests  7.5 Premium (30m 8s)
+Tokens    Ôåæ 903.9k ÔÇó Ôåô 7.9k ÔÇó 766.0k (cached)

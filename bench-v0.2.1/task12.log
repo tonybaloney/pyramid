@@ -1,0 +1,105 @@
+ÔùÅ Read pyramid.md
+  Ôöé commands\pyramid.md
+  Ôöö 72 lines read
+
+ÔùÅ Read SKILL.md
+  Ôöé skills\pyramid-orchestrate\SKILL.md
+  Ôöö 301 lines read
+
+ÔùÅ Read SKILL.md
+  Ôöé skills\pyramid-aggregate\SKILL.md
+  Ôöö 145 lines read
+
+ÔùÅ Read plugin.json
+  Ôöö 14 lines read
+
+ÔùÅ Read SKILL.md
+  Ôöé skills\pyramid-verify\SKILL.md
+  Ôöö 127 lines read
+
+ÔùÅ Read SKILL.md
+  Ôöé skills\pyramid-decompose\SKILL.md
+  Ôöö 90 lines read
+
+Now I have enough context. This is a `--dry-run=on` invocation, so I run `pyramid-decompose` only and print the DAG + planned tiers ÔÇö no edits, no tier dispatch, no aggregation.
+
+---
+
+## Pyramid Dry-run
+
+Running `pyramid-decompose` on: *"Refactor pyramid-orchestrate to split orchestration from logging into two skills."*
+
+**Heuristic signals detected:**
+- `"refactor ÔÇª split"` ÔåÆ `synthesize`, prior 0.80
+- `"design"` (implied by `--dry-run`) ÔåÆ `synthesize`, prior 0.80
+- Ambiguity markers: *"into two skills"* (scope boundary unclear) ÔåÆ +0.10 bump on design nodes
+
+**Haiku reconciliation applied** (max of heuristic vs LLM priors).
+
+---
+
+```
+=== Pyramid Dry-run ===
+DAG has 4 nodes.
+
+Node details:
+| Subtask ID                  | Kind       | difficulty_prior | Planned initial tier | Dependencies                                        |
+|-----------------------------|------------|-----------------|----------------------|-----------------------------------------------------|
+| audit-logging-concerns      | read       | 0.20            | 1                    | ÔÇö                                                   |
+| design-pyramid-trace-skill  | synthesize | 0.80            | 2                    | audit-logging-concerns                              |
+| design-orchestrate-refactor | synthesize | 0.75            | 2                    | audit-logging-concerns                              |
+| validate-design-contracts   | verify     | 0.35            | 1                    | design-pyramid-trace-skill, design-orchestrate-refactor |
+
+Dry-run complete. No tiers, verifiers, or aggregation were invoked.
+```
+
+---
+
+### Subtask descriptions
+
+| ID | Description | Success criteria |
+|----|-------------|-----------------|
+| `audit-logging-concerns` | Read `pyramid-orchestrate/SKILL.md` and enumerate every logging/tracing concern: `trace` dict construction, `subtask_trace` per-node entries, `ledger` appends, `compute_totals`, `write_trace`, the sanity assertion, and the `session_dir`-based file path logic. | Produces a complete, categorised list; nothing from the orchestrator algorithm is mis-labelled as logging. |
+| `design-pyramid-trace-skill` | Design the new `pyramid-trace` skill: YAML frontmatter, inputs (ledger entries, call_meta, subtask_trace fragments, config), outputs (`trace_path`, totals), step-by-step algorithm, and the `pyramid-trace-record` fenced-block output contract. | SKILL.md draft is self-contained; B1ÔÇôB4 hard contracts from `AGENTS.md` are preserved; `compute_totals` formula is unchanged. |
+| `design-orchestrate-refactor` | Produce the revised `pyramid-orchestrate` algorithm: all logging lines replaced by calls to `pyramid-trace`, interface delta (`begin_trace`, `record_call`, `record_verdict`, `finalise_trace`), and updated `## Output` and `## Failure handling` sections. | Revised pseudocode is complete; `write_trace` before `pyramid-aggregate` (B2) still holds; no logging state leaks back into orchestrate. |
+| `validate-design-contracts` | Cross-check both designs against `AGENTS.md` output-contract table, `plugin.json` skill manifest, `pyramid-aggregate` pre-conditions, and the four B1ÔÇôB4 hard contracts. | Zero contract violations found, or all found violations are listed with proposed resolutions. |
+
+---
+
+### Design notes (produced from dry-run analysis)
+
+**What moves to `pyramid-trace`:**
+- `trace = { ÔÇª }` initialisation
+- Per-node `subtask_trace` dict construction and `subtask_trace["calls"].append(ÔÇª)`
+- `ledger.append(ÔÇª)` 
+- `compute_totals(trace, dag)` (pinned formula, unchanged)
+- Sanity assertion (`abs(totals.cost_tw_units - ÔÇª) < 0.01`)
+- `write_trace(trace, session_dir)` + `pyramid-runs/` directory creation
+- Dry-run trace write (`write_trace(trace, ÔÇª, dry_run=True)`)
+
+**What stays in `pyramid-orchestrate`:**
+- `pyramid-decompose` invocation + topological sort
+- `pick_initial_tier` / `dispatch` / `build_context`
+- The `while True` escalation loop
+- Budget gate (`spent_so_far`)
+- `pyramid-aggregate` invocation
+
+**Proposed `pyramid-trace` call interface** (imperative, 4 operations):
+
+```
+trace_handle = pyramid-trace.begin(task, pyramid_config)
+pyramid-trace.record_call(trace_handle, subtask_id, tier, call_meta, answer)
+pyramid-trace.record_verdict(trace_handle, subtask_id, verdict)
+trace_path   = pyramid-trace.finalise(trace_handle, dag)   # runs compute_totals + write_trace
+```
+
+**B2 preservation:** `finalise` still runs before `pyramid-aggregate`; the aggregate skill's pre-condition check is unaffected.
+
+**`plugin.json` change required:** add `"pyramid-trace"` to the skills manifest (currently uses `"skills": "skills/"` glob ÔÇö no change needed if the new folder follows the existing convention).
+
+**Risk flagged:** `pyramid-aggregate` currently re-checks that the JSON trace exists and can write it as a late fallback (B2 fix). After the split, that fallback responsibility should be documented in `pyramid-trace` rather than `pyramid-aggregate`, or the fallback should explicitly call `pyramid-trace.finalise` rather than writing directly.
+
+
+Changes   +0 -0
+Requests  1 Premium (1m 30s)
+Tokens    Ôåæ 103.0k ÔÇó Ôåô 3.4k ÔÇó 78.6k (cached)
